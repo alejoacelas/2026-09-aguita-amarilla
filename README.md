@@ -12,7 +12,7 @@ from its lyrics, in the half-assed MS Paint style of
 
 - [`paint.py`](paint.py): a fake MS Paint with a mouse-shaky brush, perfect shape
   tools, a pixel bucket fill, a seeded spray can, and handwritten or typed text.
-- [`scenes.py`](scenes.py): one function per drawing (67 of them), each seeded
+- [`scenes.py`](scenes.py): one function per drawing (60 of them, 66 cuts), each seeded
   from its name.
 - [`render.py`](render.py): the cut list timed to the lyrics. It renders each
   drawing once into `out/frames/`, writes `out/contact.png`, and muxes the song
