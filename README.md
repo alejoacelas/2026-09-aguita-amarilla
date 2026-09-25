@@ -10,17 +10,25 @@ from its lyrics, in the half-assed MS Paint style of
 
 ## The remake
 
-- [`paint.py`](paint.py): a fake MS Paint with a mouse-shaky brush, perfect shape
-  tools, a pixel bucket fill, a seeded spray can, and handwritten or typed text.
-- [`scenes.py`](scenes.py): one function per drawing (60 of them, 66 cuts), each seeded
-  from its name.
-- [`render.py`](render.py): the cut list timed to the lyrics. It renders each
-  drawing once into `out/frames/`, writes `out/contact.png`, and muxes the song
-  into `out/aguita.mp4`.
+A 12 fps animation, at 5:39 as long as the song. The lines "boil": every frame is redrawn slightly differently
+six times a second, cycling through three versions, the way hand-drawn animation wobbles.
+
+- [`paint.py`](paint.py): a fake MS Paint with a mouse-shaky brush (which can
+  draw part of a stroke, for write-on), perfect shape tools, a pixel bucket fill, a seeded
+  spray can, and handwritten or typed text.
+- [`props.py`](props.py): posable characters and props (the stick narrator, the
+  drop, cows, toilet, rain) plus timing helpers. `BEAT` is the song's measured tempo.
+- [`shots.py`](shots.py): the 33 shots and the timeline. The pipes, the river,
+  the sea floor and the sky are canvases wider than the screen that the camera
+  pans across. Verse 2 reuses verse 1's shots at its own timings.
+- [`render.py`](render.py): renders frames to `out/anim/` in parallel (about 35 s
+  on 10 cores) and muxes the song into `out/aguita.mp4`.
 
 ```sh
-uv run python render.py           # everything
-uv run python render.py pee dog   # redraw a few, refresh the contact sheet
+uv run python render.py              # the whole video
+uv run python render.py sheet        # out/contact.png: three frames per shot
+uv run python render.py strip river  # eight frames across one shot
+uv run python render.py clip 72 90   # a stretch with sound, in out/work/clip.mp4
 ```
 
 The timings came from `whisper-cli` (whisper.cpp, `ggml-large-v3-turbo`) word

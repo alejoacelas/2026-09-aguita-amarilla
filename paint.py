@@ -1,10 +1,13 @@
 """A tiny fake MS Paint: mouse-shaky brush, shape tools, bucket fill, spray can, text.
 
-Every drawing gets its own seeded RNG so renders are repeatable.
+Everything random comes from a seeded RNG so renders are repeatable. `part(key)`
+reseeds it per element, so one element's wobble doesn't depend on what was drawn
+before it, and `boil` picks which of the redrawn versions of a frame we're on.
 """
 
 import math
 import random
+import zlib
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -93,9 +96,17 @@ ACCENTS = {"Á": "A", "É": "E", "Í": "I", "Ó": "O", "Ú": "U", "Ü": "U"}
 
 
 class Paint:
-    def __init__(self, seed, bg=WHITE):
-        self.rng = random.Random(seed)
-        self.img = Image.new("RGB", (W, H), bg)
+    def __init__(self, seed, bg=WHITE, w=W, h=H, boil=0, img=None):
+        self.seed, self.boil, self.w, self.h = seed, boil, w, h
+        self.rng = random.Random(f"{seed}:{boil}")
+        self.img = img if img is not None else Image.new("RGB", (w, h), bg)
+        self.calls = {}
+
+    def part(self, key):
+        """Reseed from a name, so this element keeps its shape within a boil step."""
+        n = self.calls.get(key, 0)
+        self.calls[key] = n + 1
+        self.rng = random.Random(zlib.crc32(f"{self.seed}:{self.boil}:{key}:{n}".encode()))
 
     # ---- the brush ----------------------------------------------------------
 
@@ -138,17 +149,37 @@ class Paint:
             out.append((bx + (bx - ax) * k, by + (by - ay) * k))
         return out
 
-    def brush(self, pts, width=6, color=BLACK, shake=1.0, closed=False):
+    def brush(self, pts, width=6, color=BLACK, shake=1.0, closed=False, upto=1.0):
+        """Drag the brush along `pts`. `upto` < 1 draws only the first part, for write-on."""
+        if upto <= 0:
+            return
         path = self._mouse_path(pts, shake, closed)
-        big = Image.new("L", (W * SS, H * SS), 0)
+        if upto < 1:
+            seg = [math.dist(a, b) for a, b in zip(path, path[1:])]
+            goal, acc, keep = sum(seg) * upto, 0.0, 1
+            for L in seg:
+                if acc + L > goal:
+                    break
+                acc += L
+                keep += 1
+            path = path[:max(1, keep)]
+        pad = width + 3
+        x0 = max(0, int(min(x for x, _ in path) - pad))
+        y0 = max(0, int(min(y for _, y in path) - pad))
+        x1 = min(self.w, int(max(x for x, _ in path) + pad) + 1)
+        y1 = min(self.h, int(max(y for _, y in path) + pad) + 1)
+        if x1 <= x0 or y1 <= y0:
+            return
+        big = Image.new("L", ((x1 - x0) * SS, (y1 - y0) * SS), 0)
         d = ImageDraw.Draw(big)
         rad = width * SS / 2
-        sp = [(x * SS, y * SS) for x, y in path]
-        d.line(sp, fill=255, width=int(width * SS), joint="curve")
+        sp = [((x - x0) * SS, (y - y0) * SS) for x, y in path]
+        if len(sp) > 1:
+            d.line(sp, fill=255, width=int(width * SS), joint="curve")
         for x, y in sp[:: max(1, len(sp) // 400)] + [sp[0], sp[-1]]:
             d.ellipse((x - rad, y - rad, x + rad, y + rad), fill=255)
-        mask = big.resize((W, H), Image.BILINEAR)
-        self.img.paste(Image.new("RGB", (W, H), color), (0, 0), mask)
+        mask = big.resize((x1 - x0, y1 - y0), Image.BILINEAR)
+        self.img.paste(color, (x0, y0, x1, y1), mask)
 
     def loop(self, cx, cy, rx, ry, width=6, color=BLACK, shake=1.0, n=14, closed=False):
         """A freehand ellipse that doesn't quite close (unless it has to hold a fill)."""
@@ -205,8 +236,11 @@ class Paint:
 
     def fill(self, x, y, color, tol=40):
         """Pixel flood fill that stops at anything not close to the clicked colour."""
-        a = np.asarray(self.img).astype(np.int16)
+        W, H = self.w, self.h
         x, y = int(x), int(y)
+        if not (0 <= x < W and 0 <= y < H):
+            return
+        a = np.asarray(self.img).astype(np.int16)
         target = a[y, x].copy()
         same = np.abs(a - target).sum(axis=2) <= tol
         seen = np.zeros((H, W), bool)
@@ -239,9 +273,10 @@ class Paint:
     def spray(self, cx, cy, radius, color, dots=400, wander=0.0):
         """Paint's airbrush: uniform speckles in a disc, dragged around a bit."""
         a = np.asarray(self.img).copy()
+        W, H = self.w, self.h
         r = self.rng
         x, y = cx, cy
-        for i in range(dots):
+        for i in range(int(dots)):
             if wander and i % 25 == 0:
                 x += r.uniform(-wander, wander)
                 y += r.uniform(-wander * 0.5, wander * 0.5)
@@ -258,11 +293,14 @@ class Paint:
 
     # ---- text --------------------------------------------------------------
 
-    def hand(self, text, x, y, size=36, width=4, color=BLACK, spacing=0.35, slope=0.0):
-        """Shaky handwritten capitals. Returns the x where the text ends."""
+    def hand(self, text, x, y, size=36, width=4, color=BLACK, spacing=0.35, slope=0.0, upto=None):
+        """Shaky handwritten capitals, the first `upto` characters. Returns the x where the text ends."""
         r = self.rng
         cx = x
-        for ch in text.upper():
+        shown = len(text) if upto is None else upto
+        for i, ch in enumerate(text.upper()):
+            if i >= shown:
+                break
             if ch == " ":
                 cx += size * 0.6
                 continue
@@ -298,7 +336,7 @@ class Paint:
         d.fontmode = "1"
         d.multiline_text((x, y), text, fill=color, font=f, spacing=2)
 
-    def bubble(self, x, y, tail, lines, size=30, width=4):
+    def bubble(self, x, y, tail, lines, size=30, width=4, upto=None):
         """Freehand speech bubble centred on (x, y), sized to its text, tail pointing at `tail`."""
         tw = max(len(ln) for ln in lines) * size * 0.95
         w, h = tw + size * 1.6, len(lines) * size * 1.4 + size * 1.2
@@ -311,67 +349,19 @@ class Paint:
             b1 = (cx + w / 2 * 0.97 * math.cos(a + 0.3), cy + h / 2 * 0.97 * math.sin(a + 0.3))
             self.brush([b0, tail, b1], width)
         n = len(lines)
+        left = sum(map(len, lines)) if upto is None else upto
         for i, ln in enumerate(lines):
             est = len(ln) * size * 0.92
-            self.hand(ln, cx - est / 2, cy - n * size * 0.68 + i * size * 1.35, size, width=width - 1)
+            self.hand(ln, cx - est / 2, cy - n * size * 0.68 + i * size * 1.35, size, width=width - 1,
+                      upto=max(0, min(len(ln), left)))
+            left -= len(ln)
 
-    def thought(self, x, y, tail, lines, size=30, width=4):
+    def thought(self, x, y, tail, lines, size=30, width=4, upto=None):
         """Cloud-ish thought bubble: a loop plus a trail of little circles."""
-        self.bubble(x, y, None, lines, size, width)
+        self.bubble(x, y, None, lines, size, width, upto)
         tx, ty = tail
         for k, rr in ((0.55, 16), (0.75, 11), (0.9, 7)):
             self.loop(x + (tx - x) * k, y + (ty - y) * k, rr, rr * 0.8, width - 1, n=8)
-
-    # ---- characters --------------------------------------------------------
-
-    def stick(self, x, y, s=1.0, width=6, color=BLACK, arms="out", face="smile", legs="stand", beer=False):
-        """Stick figure with feet around (x, y)."""
-        r = self.rng
-        hy = y - 250 * s
-        self.loop(x + r.uniform(-4, 4), hy, 30 * s, 28 * s, width, color, n=12)
-        # face
-        ey = hy - 4 * s
-        for ex in (-10, 8):
-            self.brush([(x + ex * s, ey)], max(3, width - 1), color, 0.2)
-        if face == "smile":
-            self.brush([(x - 12 * s, hy + 10 * s), (x, hy + 15 * s), (x + 12 * s, hy + 9 * s)], 4, color, 0.5)
-        elif face == "flat":
-            self.brush([(x - 10 * s, hy + 12 * s), (x + 10 * s, hy + 11 * s)], 4, color, 0.5)
-        elif face == "laugh":
-            self.brush([(x - 14 * s, hy + 6 * s), (x, hy + 20 * s), (x + 14 * s, hy + 6 * s), (x - 14 * s, hy + 6 * s)], 4, color, 0.5)
-        elif face == "o":
-            self.loop(x, hy + 13 * s, 5 * s, 6 * s, 3)
-        neck = hy + 28 * s
-        hip = y - 90 * s
-        self.brush([(x, neck), (x + r.uniform(-5, 5) * s, (neck + hip) / 2), (x, hip)], width, color)
-        sh = neck + 40 * s
-        if arms == "out":
-            self.brush([(x - 60 * s, sh + 5 * s), (x + 65 * s, sh - 8 * s)], width, color)
-        elif arms == "up":
-            self.brush([(x - 55 * s, sh - 70 * s), (x - 5 * s, sh)], width, color)
-            self.brush([(x + 5 * s, sh), (x + 55 * s, sh - 75 * s)], width, color)
-        elif arms == "down":
-            self.brush([(x - 40 * s, sh + 60 * s), (x, sh), (x + 40 * s, sh + 60 * s)], width, color)
-        elif arms == "pee":
-            self.brush([(x - 45 * s, sh + 50 * s), (x, sh)], width, color)
-            self.brush([(x, sh), (x + 30 * s, sh + 55 * s), (x + 12 * s, hip - 5 * s)], width, color)
-        if legs == "stand":
-            self.brush([(x - 30 * s, y), (x - 8 * s, y - 50 * s), (x, hip)], width, color)
-            self.brush([(x, hip), (x + 12 * s, y - 45 * s), (x + 32 * s, y)], width, color)
-        elif legs == "sit":
-            self.brush([(x, hip), (x + 50 * s, hip + 5 * s), (x + 55 * s, y)], width, color)
-        if beer:
-            bx, by = x + 70 * s, sh - 30 * s
-            self.rect((int(bx), int(by), int(bx + 22 * s), int(by + 40 * s)), width=3, fill=YELLOW)
-            self.rect((int(bx), int(by - 8 * s), int(bx + 22 * s), int(by)), width=3, fill=WHITE)
-        return hy
-
-    def fish(self, x, y, s=1.0, color=ORANGE, flip=False):
-        f = -1 if flip else 1
-        self.loop(x, y, 40 * s, 22 * s, 5, n=12, closed=True)
-        self.brush([(x - f * 38 * s, y), (x - f * 70 * s, y - 20 * s), (x - f * 66 * s, y + 22 * s), (x - f * 38 * s, y + 2 * s)], 5)
-        self.brush([(x + f * 20 * s, y - 6 * s)], 6, BLACK, 0.2)
-        self.fill(x, y + 4 * s, color)
 
     def save(self, path):
         self.img.save(path)
