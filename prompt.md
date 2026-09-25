@@ -1,6 +1,6 @@
-Make a music video for `song.mp3` ("Mi agüita amarilla", Los Toreros Muertos, 5:39) that looks like a bored teenager drew it in Windows 7 MS Paint with a mouse in 2010. Work autonomously; use any tools you need.
+Make a music video for `reference/song.mp3` ("Mi agüita amarilla", Los Toreros Muertos, 5:39) that looks like a bored teenager drew it in Windows 7 MS Paint with a mouse in 2010. Work autonomously; use any tools you need.
 
-`frames.md` is the timeline: 77 slide cuts with start times, durations, the lyric at each moment, and a one-line description of each of the 44 distinct drawings. Follow it exactly: same cuts, same timing, same drawings, same reuse. `style.md` describes the look. Read both fully before writing code.
+`reference/frames.md` is the timeline: 77 slide cuts with start times, durations, the lyric at each moment, and a one-line description of each of the 44 distinct drawings. Follow it exactly: same cuts, same timing, same drawings, same reuse. `reference/style.md` describes the look. Read both fully before writing code.
 
 The whole joke is that it's half-assed. Do not make it good. Hard rules:
 
@@ -11,6 +11,6 @@ The whole joke is that it's half-assed. Do not make it good. Hard rules:
 5. Fills: implement a real pixel flood fill (bucket tool) on the raster, so fills stop at outlines and leave the white gaps real Paint leaves. Soft things (clouds, vapour, pee in the river/sea, rain on buildings) use a spray-can tool: seeded random dots in a circle.
 6. Text: most words are handwritten capitals in the freehand brush, uneven letter sizes, often with a hand-drawn arrow to the thing labelled. The few typed labels listed in style.md use a small plain system font. Frame 042 is bold Comic Sans on a solid yellow canvas. The beer mug in frame 003 is a pasted realistic photo: draw the most realistic beer mug you can, next to a hand-drawn "X 40".
 7. Reuse: draw the base scene (stick figure peeing a yellow arc into the ellipse toilet) once and reuse it pixel-identical in all 43 appearances, swapping only the speech bubble or mouth. Background sets (river, sea) are drawn once and props get added on top, like editing the same .bmp.
-8. Determinism: every drawing is a pure function of a fixed seed. Render each distinct drawing once to a PNG, then assemble the video from the timeline with ffmpeg and mux in song.mp3. No per-frame randomness, so nothing shimmers.
+8. Determinism: every drawing is a pure function of a fixed seed. Render each distinct drawing once to a PNG, then assemble the video from the timeline with ffmpeg and mux in reference/song.mp3. No per-frame randomness, so nothing shimmers.
 
-Check your work: after rendering the 44 PNGs, make a contact sheet, look at it, and fix anything that looks too clean, too designed, or inconsistent with style.md. Then render stills at 10 random timestamps from the final mp4 and confirm each matches the lyric in frames.md. Deliver `aguita.mp4` plus the source.
+Check your work: after rendering the 44 PNGs, make a contact sheet, look at it, and fix anything that looks too clean, too designed, or inconsistent with style.md. Then render stills at 10 random timestamps from the final mp4 and confirm each matches the lyric in frames.md. Deliver `out/aguita.mp4` plus the source.
