@@ -2,3 +2,5 @@ reference/video.mp4
 reference/song.mp3
 out/
 .DS_Store
+__pycache__/
+.venv/
