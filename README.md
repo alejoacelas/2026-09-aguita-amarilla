@@ -1,14 +1,12 @@
 # Mi agüita amarilla, remade by Claude
 
-A one-shot prompt for Claude Code to remake the
-[MS Paint video for "Mi agüita amarilla"](https://www.youtube.com/watch?v=S0qt3w1Qo0g)
-(by Alex Párraga Ferrer, 2010), preserving its half-assed Windows 7 Paint look.
+A one-shot prompt for Claude Code to make a music video for "Mi agüita amarilla"
+from its lyrics, in the half-assed MS Paint style of
+[Alex Párraga Ferrer's 2010 fan video](https://www.youtube.com/watch?v=S0qt3w1Qo0g).
 
 - [`prompt.md`](prompt.md): the prompt.
-- [`reference/frames.md`](reference/frames.md): 77 cuts with timings, lyrics and
-  descriptions of the 44 distinct drawings in [`reference/frames/`](reference/frames/).
-  Lyrics were transcribed with whisper.cpp; timing is ±1 s.
-- [`reference/style.md`](reference/style.md): palette, line, fill and text rules.
+- [`reference/style.md`](reference/style.md) and four drawings from the original in
+  [`reference/frames/`](reference/frames/): style hints.
 
 ## Rebuilding the ignored media
 
